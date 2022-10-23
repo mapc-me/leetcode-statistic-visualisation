@@ -1,6 +1,11 @@
 from collections import UserDict
 import requests
 import redis
+import json
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from datetime import datetime
 
 
 storage = redis.Redis(
@@ -37,60 +42,66 @@ def run_user_statistic_query(username):
     else:
         raise Exception(f"Unexpected status code returned: {request.status_code}")
 
-def get_user_submissions(response_json):
-    grouped_submissions = response_json['data']['matchedUser']['submitStats']['totalSubmissionNum']
-    count = 0
-    for group in grouped_submissions:
-        count = group['submissions']
-        break
-    return count
+def get_hard(response_json):
+    
+    return response_json['data']['matchedUser']['submitStats']['totalSubmissionNum'][3]["count"]
 
-def get_user_tasks_statistic(response_json):
-    grouped_submissions = response_json['data']['matchedUser']['submitStats']['totalSubmissionNum']
-    count = 0
-    for group in grouped_submissions:
-        count = group['count']
-        break
-    return count
+def get_medium(response_json):
+    return response_json['data']['matchedUser']['submitStats']['totalSubmissionNum'][2]["count"]
 
-def get_submissions_today():
-    submissions_daily_statistic = {}
+
+def get_easy(response_json):
+    return response_json['data']['matchedUser']['submitStats']['totalSubmissionNum'][1]["count"]
+
+
+def get_submissions(response_json):
+    return response_json['data']['matchedUser']['submitStats']['totalSubmissionNum'][0]["count"]
+
+
+def get_user_data_today():
+    users_statistic = {}
     for username in usernames:
+        has_data = storage.exists(username)
+        current_user_statistic = [0, 0, 0, 0]
+        last_user_statistic = []
+        if has_data:
+            last_user_statistic = json.loads(storage.get(username).decode('utf-8'))
+        
         response_json = run_user_statistic_query(username)
-        user_submissions = get_user_submissions(response_json)
 
-        storage_key = username + submissions_key_prefix
+        if has_data:
+            current_user_statistic[0] = get_easy(response_json) - last_user_statistic[0]
+            current_user_statistic[1] = get_medium(response_json) - last_user_statistic[1]
+            current_user_statistic[2] = get_easy(response_json) - last_user_statistic[2]
+            current_user_statistic[3] = get_submissions(response_json) - last_user_statistic[3]
         
-        if not storage.exists(storage_key):
-            submissions_daily_statistic[username] = 0
-        else:
-            currentSubmissions = int(storage.get(storage_key))
-            submissions_daily_statistic[username] = user_submissions - currentSubmissions
-        
-        storage.set(storage_key, user_submissions)
+        storage.set(username, json.dumps(current_user_statistic))
+        users_statistic[username] = current_user_statistic
+    
+    return users_statistic
 
-    return submissions_daily_statistic
+def create_stat_table(users_statistic):
+    fig, ax = plt.subplots()
+    fig.patch.set_visible(False)
+    ax.axis('off')
+    ax.axis('tight')
 
+    data=[]
+    for username, stat in users_statistic.items():
+        user_data = []
+        user_data.append(username)
+        for s in stat:
+            user_data.append(s)
+        data.append(user_data)
 
-def get_solved_tasks_today():
-    solved_tasks_daily_statistic = {}
-    for username in usernames:
-        response_json = run_user_statistic_query(username)
-        user_solved_tasks = get_user_tasks_statistic(response_json)
+    df = pd.DataFrame(data,columns=["username", "easy", "medium", "hard", "sumbissions"])
 
-        storage_key = username + solved_key_prefix
-        
-        if not storage.exists(storage_key):
-            solved_tasks_daily_statistic[username] = 0
-        else:
-            currentSolved = int(storage.get(storage_key))
-            solved_tasks_daily_statistic[username] = user_solved_tasks - currentSolved
-        
-        storage.set(storage_key, user_solved_tasks)
+    ax.table(cellText=df.values, colLabels=df.columns, loc='center')
+    ax.set_title("Users statistic " + datetime.today().strftime('%Y-%m-%d'))
+    fig.tight_layout()
 
-    return solved_tasks_daily_statistic
+    plt.savefig(ax.get_title())
 
 
-
-print(get_submissions_today())
-print(get_solved_tasks_today())
+data = get_user_data_today()
+create_stat_table(data)
