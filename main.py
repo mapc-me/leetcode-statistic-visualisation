@@ -1,4 +1,3 @@
-from collections import UserDict
 import requests
 import redis
 import json
@@ -6,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from datetime import datetime
+from io import BytesIO
 
 
 storage = redis.Redis(
@@ -100,8 +100,29 @@ def create_stat_table(users_statistic):
     ax.set_title("Users statistic " + datetime.today().strftime('%Y-%m-%d'))
     fig.tight_layout()
 
-    plt.savefig(ax.get_title())
+    return fig
+    # plt.savefig(ax.get_title())
 
+def send_to_telegram(fig):
+    api_token = ''
+    chat_id = -1001508628054
+    apiURL = f'https://api.telegram.org/bot{api_token}/sendPhoto'
+
+    plot_file = BytesIO()
+    fig.savefig(plot_file, format='png')
+    plot_file.seek(0)
+
+    request_data = {
+        "chat_id": chat_id,
+        "plot_file": plot_file,
+    }
+
+    params = {'chat_id': request_data['chat_id']}
+    files = {'photo': request_data['plot_file']}
+
+    resp = requests.post(apiURL, data = params, files = files)
+    print(resp.text)
 
 data = get_user_data_today()
-create_stat_table(data)
+fig = create_stat_table(data)
+send_to_telegram(fig)
