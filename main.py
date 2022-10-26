@@ -55,7 +55,7 @@ def get_easy(response_json):
 
 
 def get_submissions(response_json):
-    return response_json['data']['matchedUser']['submitStats']['totalSubmissionNum'][0]["count"]
+    return response_json['data']['matchedUser']['submitStats']['totalSubmissionNum'][0]["submissions"]
 
 
 def get_user_data_today():
@@ -72,10 +72,12 @@ def get_user_data_today():
         if has_data:
             current_user_statistic[0] = get_easy(response_json) - last_user_statistic[0]
             current_user_statistic[1] = get_medium(response_json) - last_user_statistic[1]
-            current_user_statistic[2] = get_easy(response_json) - last_user_statistic[2]
+            current_user_statistic[2] = get_hard(response_json) - last_user_statistic[2]
             current_user_statistic[3] = get_submissions(response_json) - last_user_statistic[3]
+
+
         
-        storage.set(username, json.dumps(current_user_statistic))
+        storage.set(username, json.dumps([get_easy(response_json),get_medium(response_json), get_hard(response_json), get_submissions(response_json)]))
         users_statistic[username] = current_user_statistic
     
     return users_statistic
